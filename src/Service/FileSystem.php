@@ -1,13 +1,13 @@
 <?php
 
-namespace BenRowan\ManagePhotos\Service;
+namespace BenRowan\PhotoTool\Service;
 
-use BenRowan\ManagePhotos\Model\File;
+use BenRowan\PhotoTool\Model\File;
 
-class Filesystem
+class FileSystem
 {
     /**
-     * Get all files from all directories recursively starting at $directory.
+     * Find all files from all directories recursively starting at $directory.
      * 
      * Note: scandir was used in place of RecursiveDirectoryIterator as it's
      * twice as fast (for what we need) and uses much less memory:
@@ -22,12 +22,12 @@ class Filesystem
      * Memory usage (MB): 193.44
      * Number of files found: 23,055
      * 
-     * @param string $directory The directory to start from.
-     * @param File[] $files The collected files. 
+     * @param string $directory The directory to start searching from.
+     * @param File[] $files The files found. 
      * 
      * @return File[]
      */
-    public function getFilesRecursively(string $directory, &$files = [])
+    public function findFiles(string $directory, &$files = [])
     {
         foreach (scandir($directory) as $filename) {
             if (in_array($filename, ['.', '..'])) {
@@ -37,7 +37,7 @@ class Filesystem
             $path = realpath($directory . DIRECTORY_SEPARATOR . $filename);
             
             if (is_dir($path)) {
-                $this->getFilesRecursively($path, $files);
+                $this->findFiles($path, $files);
             } else {
                 $files[] = new File($path);
             }
