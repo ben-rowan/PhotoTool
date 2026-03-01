@@ -1,11 +1,16 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace BenRowan\PhotoTool\Service;
 
 use BenRowan\PhotoTool\Model\File;
+use DI\Container;
 
 class FileSystem
 {
+    public function __construct(
+        private Container $container
+    ){}
+
     /**
      * Find all files from all directories recursively starting at $directory.
      * 
@@ -39,7 +44,7 @@ class FileSystem
             if (is_dir($path)) {
                 $this->findFiles($path, $files);
             } else {
-                $files[] = new File($path);
+                $files[] = $this->container->make(File::class, ['path' => $path]);
             }
         }
     

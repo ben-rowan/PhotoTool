@@ -1,80 +1,110 @@
-Create root node.
+Plan / Algorithm For Finding Duplicate Files
+============================================
 
-[root]
+Find all files recursively from target directory and instantiate a File object for each.
 
-Find all files
-FOREACH file
-    Fetch file size (bytes)
-    IF root node has no node for filesize, add node
-    Add file path to path array held on associated filesize node
+Sort By File Size
+-----------------
 
-[root]
-|
-|---[100]
-|   |---<some/path/file1.jpg>
-|   |---<some/other/path/file1.jpg>
-|
-|---[20]
-|   |---<some/path/file2.jpg>
-|   |---<some/other/path/file2.jpg>
-|
-|---[10]
-    |---<some/path/file3.png>
+> We sort by file size first as this is a relatively quick operation.
+> I can scan ~50k files (~300GB) in less than one second on my machine.
 
-Prune nodes - remove any filesize nodes with only 1 file in their file path array
+FOREACH File:
+    FETCH file size (bytes).
+    IF array has nothing set for file size key, add an empty array.
+    ADD File to array associated with file size key.
 
-[root]
-|
-|---[100]
-|   |---<some/path/file1.jpg>
-|   |---<some/other/path/file1.jpg>
-|
-|---[20]
-    |---<some/path/file2.jpg>
-    |---<some/other/path/file2.jpg>
+This leaves us with:
 
-FOREACH path held on a filesize node
-    Fetch first N bytes of file
-    Hash N bytes
-    IF filesize node has no node for first N bytes hash, add node
-    Add file path to path array held on associated first N bytes node
+```php
+[
+    '100' => [
+        File("some/path/file1.jpg"),
+        File("some/other/path/file1.jpg"),
+    ],
+    '20' => [
+        File("some/path/file2.jpg"),
+        File("some/other/path/file2.jpg"),
+    ],
+    '10' => [
+        File("some/path/file3.png")
+    ],
+]
+```
 
-[root]
-|
-|---[100]
-|   |---[N_HASH_1]
-|   |   |---<some/path/file1.jpg>
-|   |
-|   |---[N_HASH_2]
-|       |---<some/other/path/file1.jpg>
-|
-|---[20]
-    |---[N_HASH_3]
-        |---<some/path/file2.jpg>
-        |---<some/other/path/file2.jpg>
+Remove any arrays with only one file:
 
-Prune nodes - remove any first N Byte nodes with only 1 file in their file path array
+```php
+[
+    '100' => [
+        File("some/path/file1.jpg"),
+        File("some/other/path/file1.jpg"),
+    ],
+    '20' => [
+        File("some/path/file2.jpg"),
+        File("some/other/path/file2.jpg"),
+    ],
+]
+```
 
-[root]
-|
-|---[20]
-    |---[N_HASH_3]
-        |---<some/path/file2.jpg>
-        |---<some/other/path/file2.jpg>
+We're now left with a set of files that _could_ be duplicates.
 
-FOREACH path held on a first N bytes node
-    Fetch all bytes for file
-    Hash bytes
-    IF first N bytes node has no node for full hash, add node
-    Add file path to path array held on associated full hash node
+Flatten the array ready for the next step:
 
-[root]
-|
-|---[20]
-    |---[N_HASH_3]
-        |---[FULL_HASH_1]
-            |---<some/path/file2.jpg>
-            |---<some/other/path/file2.jpg>
+```php
+[
+    File("some/path/file1.jpg"),
+    File("some/other/path/file1.jpg"),
+    File("some/path/file2.jpg"),
+    File("some/other/path/file2.jpg"),
+]
+```
+
+Ok, so this algorithm is going to be repeated a number of times, so let's extract it into a "function":
+
+FUNCTION sortFiles(callable $sortingKeyGenerator, array $files):
+    INIT $collections array for us to store sorted Files.
+
+    FOREACH File in $files:    
+        GENERATE $sortingKey using $sortingKeyGenerator(File).
+        IF $collections has nothing set for $sortingKey:
+            SET empty array.
+        ADD File to array associated with $sortingKey.
+
+    FOREACH $collection in $collections:
+        IF $collection SIZE IS 1:
+            REMOVE $collection from $collections.
+
+    // The array flattening will happen outside this function
+    // as we want the unflattened array on the final call.
+    RETURN $collections.
+END
+
+Sort By First N Bytes
+---------------------
+
+In order to have a high confidence we've found a duplicate, we need to read the full file from disk and hash it. Based on the benchmarking I completed for this, it can be seen that full file hashing speed is impacted by the types of file being processed see [file_hash_benchmark.php](scratch/file_hash_benchmark.php). However, only reading the first N bytes of a file isn't impacted (in a meaningful way) and is increadibly fast. As such, we'll introduce a "first N bytes" sorting here to reduce the search space for full file hashing.
+
+CALLABLE sortingKeyGenerator(File):
+    FETCH first N bytes of file.
+    HASH first N bytes of file.
+
+    RETURN hash.
+
+CALL sortFiles($sortingKeyGenerator, flattened Files array from previous step).
 
 
-Any full hash node containing > 1 files represents a duplicate.
+Sort By Full File Hash
+----------------------
+
+We've now done our best to reduce the search space, so it's time to do the most expensive operation, full file hashing.
+
+CALLABLE sortingKeyGenerator(File):
+    FETCH all bytes from file.
+    HASH all bytes from file.
+
+    RETURN hash.
+
+CALL sortFiles($sortingKeyGenerator, flattened Files array from previous step).
+
+The output of sortFiles should this time only contain duplicates grouped together into "collections".

@@ -1,0 +1,18 @@
+#!/usr/bin/env php
+
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use BenRowan\PhotoTool\Command\FindByFileTypeCommand;
+use Symfony\Component\Console\Application;
+use BenRowan\PhotoTool\Command\FindDuplicatesCommand;
+
+$container = new DI\Container();
+
+$application = $container->get(Application::class);
+
+$application->add($container->get(FindDuplicatesCommand::class));
+$application->add($container->get(FindByFileTypeCommand::class));
+
+$application->run();

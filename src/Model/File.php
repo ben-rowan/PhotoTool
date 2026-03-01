@@ -1,40 +1,38 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace BenRowan\PhotoTool\Model;
 
+use BenRowan\PhotoTool\Service\Hasher;
 use RuntimeException;
+use Stringable;
 
-/**
- * Class File
- * 
- * @package BenRowan\PhotoTool\Model
- */
-class File
+class File implements Stringable
 {
-    /**
-     * @var string
-     */
-    private $path;
     /**
      * @var string|null
      */
     private $fullFileHash = null;
     /**
-     * @var String[]
+     * @var string[]
      */
     private $firstNByteHashes = [];
     /**
      * @var int|null
      */
-    private $totalFilesizeBytes = null;
+    private $totalFileSizeBytes = null;
+    /**
+     * @var string|null
+     */
+    private $mimeType = null;
     
     /**
+     * @param Hasher $hasher Service class used for hashing.
      * @param string $path Path to the file on the filesystem.
      */
-    public function __construct(string $path)
-    {
-        $this->path = $path;
-
+    public function __construct(
+        private Hasher $hasher,
+        private string $path
+    ) {
         if (!file_exists($this->getPath())) {
             throw new RuntimeException(
                 "Trying to work with file '{$this->getPath()}' but it doesn't exist"
@@ -59,6 +57,31 @@ class File
     }
 
     /**
+     * Detect the mime type of the file.
+     * 
+     * Note: This is cached so it's safe to call multiple times.
+     *
+     * @return string
+     */
+    public function getMimeType(): string
+    {
+        if (null === $this->mimeType) {
+            // Note: turned out to be too slow :)
+            //
+            // // Using this over mime_content_type or Fileinfo as
+            // // people seem to get mixed results with those.
+
+            // $this->mimeType = shell_exec(
+            //     sprintf("file -b --mime-type -m /usr/share/misc/magic '%s'", $this->getPath())
+            // );
+
+            $this->mimeType = mime_content_type($this->getPath());
+        }
+        
+        return $this->mimeType;
+    }
+
+    /**
      * Get a hash of the full file.
      * 
      * Note: This is cached so it's safe to call multiple times.
@@ -70,7 +93,7 @@ class File
         if (null === $this->fullFileHash) {
             $allBytes = $this->readFirstNBytes($this->getTotalFilesizeBytes());
 
-            $this->fullFileHash = md5($allBytes);
+            $this->fullFileHash = $this->hasher->hash($allBytes);
         }
         
         return $this->fullFileHash;
@@ -81,6 +104,8 @@ class File
      * 
      * Note: This is cached so it's safe to call multiple times.
      * 
+     * @param integer $numBytes The number of bytes to read from the start of the file.
+     * 
      * @return string
      */
     public function hashFirstNBytes(int $numBytes): string
@@ -88,7 +113,7 @@ class File
         if (!isset($this->firstNByteHashes[$numBytes])) {
             $firstNBytes = $this->readFirstNBytes($numBytes);
 
-            $this->firstNByteHashes[$numBytes] = md5($firstNBytes);
+            $this->firstNByteHashes[$numBytes] = $this->hasher->hash($firstNBytes);
         }
         
         return $this->firstNByteHashes[$numBytes];
@@ -101,22 +126,27 @@ class File
      * 
      * @return int
      */
-    public function getTotalFilesizeBytes(): int
+    public function getTotalFileSizeBytes(): int
     {
-        if (null === $this->totalFilesizeBytes) {
-            $totalFilesizeBytes = filesize($this->getPath());
+        if (null === $this->totalFileSizeBytes) {
+            $totalFileSizeBytes = filesize($this->getPath());
 
-            if (false === $totalFilesizeBytes) {
+            if (false === $totalFileSizeBytes) {
                 throw new RuntimeException(
                     "Unable to get filesize for '{$this->getPath()}'"
                 );
             }
 
-            $this->totalFilesizeBytes = $totalFilesizeBytes;
+            $this->totalFileSizeBytes = $totalFileSizeBytes;
         }
 
 
-        return $this->totalFilesizeBytes;
+        return $this->totalFileSizeBytes;
+    }
+
+    public function __toString(): string
+    {
+        return $this->getPath();
     }
 
     /**
