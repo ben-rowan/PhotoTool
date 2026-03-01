@@ -87,7 +87,9 @@ END
 Sort By First N Bytes
 ---------------------
 
-In order to have a high confidence we've found a duplicate, we need to read the full file from disk and hash it. Based on the benchmarking I completed for this, it can be seen that full file hashing speed is impacted by the types of file being processed see [file_hash_benchmark.php](scratch/file_hash_benchmark.php). However, only reading the first N bytes of a file isn't impacted (in a meaningful way) and is increadibly fast. As such, we'll introduce a "first N bytes" sorting here to reduce the search space for full file hashing.
+In order to have a high confidence we've found a duplicate, we need to read the full file from disk and hash it.
+
+Based on the benchmarking I completed, you can see that full file hashing speed is impacted by file type (see [file_hash_benchmark.php](scratch/file_hash_benchmark.php)). However, only reading the first N bytes of a file isn't (in a meaningful way) and is increadibly fast. As such, we'll introduce a "first N bytes" sorting step here to reduce the search space for full file hashing.
 
 ```
 CALLABLE sortingKeyGenerator(File):
@@ -103,6 +105,7 @@ Sort By Full File Hash
 ----------------------
 
 We've now done our best to reduce the search space, so it's time to do the most expensive operation, full file hashing.
+
 ```
 CALLABLE sortingKeyGenerator(File):
     FETCH all bytes from file.
